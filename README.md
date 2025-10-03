@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Booking & Partner Verification System
 
-## Getting Started
+## Project Overview
 
-First, run the development server:
+This project is a full-stack application to manage bookings and partner assignments. It includes features for reviewing  documents, confirming bookings, assigning the nearest available partner, and tracking partners' GPS locations in real-time. The system is designed to be concurrency-safe, ensuring that critical operations like partner assignment and document reviews are handled without conflicts.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Tech Stack
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+* **Frontend**: Next.js,, TypeScript, Tailwind CSS
+* **Backend**: Next.js API Routes
+* **Database**: MongoDB
+* **Caching & Messaging**: Redis (for locks, rate limiting, and pub/sub)
+* **Containerization**: Docker Compose
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Running the Application Locally
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+To run this project, you will need **Docker** and **Docker Compose** installed on your machine.
 
-## Learn More
+1.  **Clone the repository:**
+    ```bash
+    git clone url
+    cd rep_name
+    ```
 
-To learn more about Next.js, take a look at the following resources:
+2.  **Create your environment file:**
+    This project uses a `.env` file to manage the database credentials for Docker Compose. To get started, copy the example file:
+    ```bash
+    cp .env.example .env
+    ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3.  **Run the application:**
+    Use Docker Compose to build the images and start all the services with a single command.
+    ```bash
+    docker-compose up --build
+    ```
+    The `--build` flag is only needed the first time you run it or after you make code changes. For subsequent starts, you can just use `docker-compose up`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+    The application will be available at `http://localhost:3000`.
 
-## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## API Endpoints
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Bookings
+
+* **`GET /api/bookings`**
+    * Fetches all bookings and their current status (PENDING, CONFIRMED, or ASSIGNED).
+* **`POST /api/bookings/{id}/review`**
+    * Updates the status of a document (e.g., to "APPROVED").
+    * **Body**: `{ "docType": "SELFIE", "status": "APPROVED" }`
+* **`POST /api/bookings/{id}/confirm`**
+    * Confirms a booking if all documents are approved.
+    * Publishes a `booking:confirmed` event to Redis.
+* **`POST /api/bookings/{id}/assign`**
+    * Assigns the nearest online partner to a confirmed booking.
+    * Publishes a `booking:assigned` event to Redis.
+* **`GET /api/bookings/events`**
+    * Streams real-time events (booking confirmations, partner assignments, and GPS updates) to the client using Server-Sent Events (SSE).
+
+### Partners
+
+* **`POST /api/partners/{id}/gps`**
+    * Updates a partner's GPS location. This endpoint is rate-limited to 6 requests per minute per partner.
+    * **Body**: `{ "lat": 19.203, "lng": 72.82}`
+    * Publishes a `partner:location` event to Redis.

@@ -1,103 +1,247 @@
-import Image from "next/image";
+"use client";
+import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+} from "@mui/material";
+import { useEffect, useState } from "react";
+
+interface Document {
+  docType: string;
+  docLink: string;
+  status: string;
+}
+
+interface Booking {
+  _id: string;
+  location: string;
+  document: Document[];
+  partnerId?: string;
+  address: { latitude: number; longitude: number };
+  status: "PENDING" | "CONFIRMED" | "ASSIGNED";
+  partnerName?: string;
+}
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
+  const [selectedID, setSelectedID] = useState<string | null>(null);
+  const [partnerLocations, setPartnerLocations] = useState({});
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  const handleOpenDialog = (id: string, doc: Document) => {
+    setSelectedDoc(doc);
+    setSelectedID(id);
+    setOpenDialog(true);
+  };
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setSelectedDoc(null);
+    setSelectedID(null);
+  };
+
+  const fetchBookings = async () => {
+    const res = await fetch("/api/bookings");
+    const data = await res.json();
+    setBookings(data.bookings);
+  };
+
+  useEffect(() => {
+    const eventSource = new EventSource("/api/bookings/events");
+    eventSource.onmessage = async (event) => {
+      const rawData = event.data?.startsWith("data: ")
+        ? event.data.substring(6).trim()
+        : event.data;
+
+      if (!rawData) {
+        return;
+      }
+
+      const data = JSON.parse(rawData);
+
+      if (data.channel === "booking:confirmed") {
+        alert(`Booking is confirmed: ${data.id}`);
+        await fetchBookings();
+      } else if (data.channel === "booking:assigned") {
+        alert(
+          `Partner ${data.partnerId} assigned to Booking ${data.bookingId}.`
+        );
+        await fetchBookings();
+      } else if (data.channel === "partner:location") {
+        setPartnerLocations((prev) => ({
+          ...prev,
+          [data.id]: { name: data.name, lat: data.lat, lng: data.lng },
+        }));
+        console.log(`Live GPS update for Partner ${data.id}`);
+      }
+
+      console.log("SSE event received:", data);
+    };
+
+    fetchBookings();
+
+    return () => eventSource.close();
+  }, []);
+
+  const handleApprove = async (docType: string) => {
+    if (!selectedID) return;
+    await fetch(`/api/bookings/${selectedID}/review`, {
+      method: "POST",
+      body: JSON.stringify({ docType, status: "APPROVED" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    fetchBookings();
+    handleCloseDialog();
+  };
+
+  const handleConfirm = async (bookingId: string) => {
+    await fetch(`/api/bookings/${bookingId}/confirm`, { method: "POST" });
+    fetchBookings();
+  };
+
+  const handleAssignPartner = async (bookingId: string) => {
+    await fetch(`/api/bookings/${bookingId}/assign`, { method: "POST" });
+    fetchBookings();
+  };
+
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Bookings</h1>
+      <table className="w-full border border-gray-300 text-center">
+        <thead>
+          <tr className="bg-gray-200">
+            <th className="p-2 border">Booking ID</th>
+            <th className="p-2 border">location</th>
+            <th className="p-2 border">Status</th>
+            <th className="p-2 border">Documents</th>
+            <th className="p-2 border">Confirm Booking</th>
+            <th className="p-2 border">Assign Partner</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bookings.map((b) => (
+            <tr key={b._id}>
+              <td className="p-2 border">{b._id}</td>
+              <td className="p-2 border">{b.location}</td>
+              <td className="p-2 border">{b.status}</td>
+              <td className="p-2 border">
+                {b.document.map((doc: any) => (
+                  <div
+                    key={doc.docType}
+                    className="flex justify-center gap-3 mb-2 items-center"
+                  >
+                    <span>
+                      {doc.docType} -{" "}
+                      {doc.status === "APPROVED" ? (
+                        <span className="text-green-500">APPROVED</span>
+                      ) : (
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => handleOpenDialog(b._id, doc)}
+                        >
+                          Review
+                        </Button>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </td>
+
+              <td className="p-2 border">
+                <button
+                  className={`px-3 py-1 rounded text-white bg-blue-600 hover:bg-blue-700" 
+                  }`}
+                  onClick={() => handleConfirm(b._id)}
+                >
+                  Confirm Booking
+                </button>
+              </td>
+
+              <td className="p-2 border">
+                {b.partnerName ? (
+                  <span className="font-semibold text-green-700">
+                    {b.partnerName}
+                  </span>
+                ) : (
+                  <button
+                    className={`px-3 py-1 rounded text-white ${
+                      b.status === "CONFIRMED"
+                        ? "bg-blue-600 hover:bg-blue-700"
+                        : "bg-gray-400 cursor-not-allowed"
+                    }`}
+                    disabled={b.status !== "CONFIRMED"}
+                    onClick={() => handleAssignPartner(b._id)}
+                  >
+                    Assign
+                  </button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h2 className="text-xl font-bold mt-8 mb-4">Live Partner Tracking</h2>
+      <table className="w-full border border-gray-300 text-center">
+        <thead>
+          <tr className="bg-gray-200">
+            <th className="p-2 border">Partner Name</th>
+            <th className="p-2 border">Latitude</th>
+            <th className="p-2 border">Longitude</th>
+            <th className="p-2 border">Tracking Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(partnerLocations).map(([id, p]: any) => (
+            <tr key={id}>
+              <td className="p-2 border">{p.name}</td>
+              <td className="p-2 border">{p.lat.toFixed(5)}</td>
+              <td className="p-2 border">{p.lng.toFixed(5)}</td>
+              <td className="p-2 border text-green-600">LIVE</td>
+            </tr>
+          ))}
+          {Object.keys(partnerLocations).length === 0 && (
+            <tr>
+              <td colSpan={4} className="p-4 text-gray-500">
+                Awaiting live partner location data...
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* Document Review Dialog */}
+      {selectedDoc && (
+        <DocumentReviewDialog
+          open={openDialog}
+          onClose={handleCloseDialog}
+          onApprove={handleApprove}
+          doc={selectedDoc}
+        />
+      )}
     </div>
+  );
+}
+
+function DocumentReviewDialog({ open, onClose, onApprove, doc }: any) {
+  return (
+    <Dialog open={open} onClose={onClose}>
+      <DialogTitle>Review Document: {doc.docType}</DialogTitle>
+      <DialogContent>
+        <img
+          src={doc.docLink}
+          alt={doc.docType}
+          style={{ width: "100%", maxHeight: "400px", objectFit: "cover" }}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => onApprove(doc.docType)} color="primary">
+          Approve
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
