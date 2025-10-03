@@ -18,8 +18,8 @@ To run this project, you will need **Docker** and **Docker Compose** installed o
 
 1.  **Clone the repository:**
     ```bash
-    git clone url
-    cd rep_name
+    git clone https://github.com/shilpashingnapure/bookings-partner-assignments.git
+    cd bookings-partner-assignments
     ```
 
 2.  **Create your environment file:**
